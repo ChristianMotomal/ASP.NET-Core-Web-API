@@ -25,10 +25,5 @@ namespace api.Dtos.Stock
         public string Industry { get; set; } = string.Empty;
         [Range(1, 5000000000)]
         public long MarketCap { get; set; }
-
-        internal object ToStockFromCreateDTO()
-        {
-            throw new NotImplementedException();
-        }
     }
 }
