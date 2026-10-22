@@ -4,6 +4,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using api.Data;
 using Microsoft.AspNetCore.Mvc;
+using api.Dto.Stock;
+using api.Mappers;
 
 namespace api.Controllers
 {
@@ -21,9 +23,15 @@ namespace api.Controllers
 
         public IActionResult Getall()
         {
-            var stock = _context.Stocks.ToList();
+            var stock = _context.Stocks.ToList()
+            .Select(s => s.ToStockDto());
 
             return Ok(stock);
+        }
+
+        private void Select(Func<object, object> value)
+        {
+            throw new NotImplementedException();
         }
 
         [HttpGet("{id}")]
@@ -36,7 +44,20 @@ namespace api.Controllers
                 return NotFound();
             }
 
-            return Ok(stock);
+            return Ok(stock.ToStockDto());
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> Create([FromBody] CreateStockRequestDto stockDto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var stockModel = stockDto.ToStockFromCreateDTO();
+
+            await _stockRepo.CreateAsync(stockModel);
+
+            return CreatedAtAction(nameof(GetById), new { id = stockModel.Id }, stockModel.ToStockDto());
         }
 
     }
