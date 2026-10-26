@@ -64,6 +64,7 @@ namespace api.Controllers
 
         [HttpPost]
         [Route("{symbol:alpha}")]
+        [Authorize]
         public async Task<IActionResult> Create([FromRoute] string symbol, CreateCommentDto commentDto)
         {
             if (!ModelState.IsValid)
@@ -86,9 +87,12 @@ namespace api.Controllers
 
             var username = User.GetUsername();
             var appUser = await _userManager.FindByNameAsync(username);
+            if (appUser == null)
+                return Unauthorized("User not found");
 
             var commentModel = commentDto.ToCommentFromCreate(stock.Id);
             commentModel.AppUserId = appUser.Id;
+            commentModel.AppUser = appUser;
             await _commentRepo.CreateAsync(commentModel);
             return CreatedAtAction(nameof(GetById), new { id = commentModel.Id }, commentModel.ToCommentDto());
         }

@@ -42,8 +42,8 @@ namespace api.Controllers
             return Ok(
                 new NewUserDto
                 {
-                    UserName = user.UserName,
-                    Email = user.Email,
+                    UserName = user.UserName ?? string.Empty,
+                    Email = user.Email ?? string.Empty,
                     Token = _tokenService.CreateToken(user)
                 }
             );
@@ -73,8 +73,8 @@ namespace api.Controllers
                         return Ok(
                             new NewUserDto
                             {
-                                UserName = appUser.UserName,
-                                Email = appUser.Email,
+                                UserName = appUser.UserName ?? string.Empty,
+                                Email = appUser.Email ?? string.Empty,
                                 Token = _tokenService.CreateToken(appUser)
                             }
                         );

@@ -35,6 +35,9 @@ namespace api.Controllers
         {
             var username = User.GetUsername();
             var appUser = await _userManager.FindByNameAsync(username);
+            if (appUser == null)
+                return Unauthorized("User not found");
+
             var userPortfolio = await _portfolioRepo.GetUserPortfolio(appUser);
             return Ok(userPortfolio);
         }
@@ -45,6 +48,9 @@ namespace api.Controllers
         {
             var username = User.GetUsername();
             var appUser = await _userManager.FindByNameAsync(username);
+            if (appUser == null)
+                return Unauthorized("User not found");
+
             var stock = await _stockRepo.GetBySymbolAsync(symbol);
 
             if (stock == null)
@@ -90,6 +96,8 @@ namespace api.Controllers
         {
             var username = User.GetUsername();
             var appUser = await _userManager.FindByNameAsync(username);
+            if (appUser == null)
+                return Unauthorized("User not found");
 
             var userPortfolio = await _portfolioRepo.GetUserPortfolio(appUser);
 
