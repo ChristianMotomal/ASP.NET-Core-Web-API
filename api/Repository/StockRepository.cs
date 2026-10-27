@@ -7,7 +7,7 @@ using api.Dtos.Stock;
 using api.Helpers;
 using api.Interfaces;
 using api.Models;
-using Microsoft.EntityFrameworkCore;
+using MySql.Data.MySqlClient;
 
 namespace api.Repository
 {
@@ -21,87 +21,109 @@ namespace api.Repository
 
         public async Task<Stock> CreateAsync(Stock stockModel)
         {
-            await _context.Stocks.AddAsync(stockModel);
-            await _context.SaveChangesAsync();
+            var id = StoredProcedures.Out("p_Id", MySqlDbType.Int32);
+
+            await _context.Database.ExecuteStoredProcedureAsync("sp_Stock_Create",
+                StoredProcedures.In("p_Symbol", stockModel.Symbol),
+                StoredProcedures.In("p_CompanyName", stockModel.CompanyName),
+                StoredProcedures.In("p_Purchase", stockModel.Purchase),
+                StoredProcedures.In("p_LastDiv", stockModel.LastDiv),
+                StoredProcedures.In("p_Industry", stockModel.Industry),
+                StoredProcedures.In("p_MarketCap", stockModel.MarketCap),
+                id);
+
+            stockModel.Id = Convert.ToInt32(id.Value);
             return stockModel;
         }
 
-        public async Task<Stock?> DeleteAsync(int id)
+        public Task<Stock?> DeleteAsync(int id)
         {
-            var stockModel = await _context.Stocks.FirstOrDefaultAsync(x => x.Id == id);
-
-            if (stockModel == null)
-            {
-                return null;
-            }
-
-            _context.Stocks.Remove(stockModel);
-            await _context.SaveChangesAsync();
-            return stockModel;
+            return _context.Database.QueryStoredProcedureAsync("sp_Stock_Delete",
+                reader => reader.ReadFirstOrDefaultAsync(StoredProcedureReaders.ReadStock),
+                StoredProcedures.In("p_Id", id));
         }
 
-        public async Task<List<Stock>> GetAllAsync(QueryObject query)
+        public Task<List<Stock>> GetAllAsync(QueryObject query)
         {
-            var stocks = _context.Stocks.Include(c => c.Comments).ThenInclude(a => a.AppUser).AsQueryable();
-
-            if (!string.IsNullOrWhiteSpace(query.CompanyName))
+            return _context.Database.QueryStoredProcedureAsync("sp_Stock_GetAll", async reader =>
             {
-                stocks = stocks.Where(s => s.CompanyName.Contains(query.CompanyName));
-            }
+                var stocks = await reader.ReadAllAsync(StoredProcedureReaders.ReadStock);
 
-            if (!string.IsNullOrWhiteSpace(query.Symbol))
-            {
-                stocks = stocks.Where(s => s.Symbol.Contains(query.Symbol));
-            }
+                await reader.NextResultAsync();
+                var comments = await reader.ReadAllAsync(StoredProcedureReaders.ReadCommentWithAuthor);
 
-            if (!string.IsNullOrWhiteSpace(query.SortBy))
+                AttachComments(stocks, comments);
+                return stocks;
+            },
+            StoredProcedures.In("p_CompanyName", NullIfWhiteSpace(query.CompanyName)),
+            StoredProcedures.In("p_Symbol", NullIfWhiteSpace(query.Symbol)),
+            StoredProcedures.In("p_SortBy", query.SortBy),
+            StoredProcedures.In("p_IsDescending", query.IsDecsending),
+            StoredProcedures.In("p_PageNumber", query.PageNumber),
+            StoredProcedures.In("p_PageSize", query.PageSize));
+        }
+
+        public Task<Stock?> GetByIdAsync(int id)
+        {
+            return _context.Database.QueryStoredProcedureAsync("sp_Stock_GetById", async reader =>
             {
-                if (query.SortBy.Equals("Symbol", StringComparison.OrdinalIgnoreCase))
+                var stock = await reader.ReadFirstOrDefaultAsync(StoredProcedureReaders.ReadStock);
+
+                await reader.NextResultAsync();
+                var comments = await reader.ReadAllAsync(StoredProcedureReaders.ReadComment);
+
+                if (stock != null)
                 {
-                    stocks = query.IsDecsending ? stocks.OrderByDescending(s => s.Symbol) : stocks.OrderBy(s => s.Symbol);
+                    AttachComments(new List<Stock> { stock }, comments);
                 }
-            }
-
-            var skipNumber = (query.PageNumber - 1) * query.PageSize;
-
-
-            return await stocks.Skip(skipNumber).Take(query.PageSize).ToListAsync();
+                return stock;
+            },
+            StoredProcedures.In("p_Id", id));
         }
 
-        public async Task<Stock?> GetByIdAsync(int id)
+        public Task<Stock?> GetBySymbolAsync(string symbol)
         {
-            return await _context.Stocks.Include(c => c.Comments).FirstOrDefaultAsync(i => i.Id == id);
-        }
-
-        public async Task<Stock?> GetBySymbolAsync(string symbol)
-        {
-            return await _context.Stocks.FirstOrDefaultAsync(s => s.Symbol == symbol);
+            return _context.Database.QueryStoredProcedureAsync("sp_Stock_GetBySymbol",
+                reader => reader.ReadFirstOrDefaultAsync(StoredProcedureReaders.ReadStock),
+                StoredProcedures.In("p_Symbol", symbol));
         }
 
         public Task<bool> StockExists(int id)
         {
-            return _context.Stocks.AnyAsync(s => s.Id == id);
+            return _context.Database.QueryStoredProcedureAsync("sp_Stock_Exists",
+                async reader => await reader.ReadAsync() && Convert.ToBoolean(reader["StockExists"]),
+                StoredProcedures.In("p_Id", id));
         }
 
-        public async Task<Stock?> UpdateAsync(int id, UpdateStockRequestDto stockDto)
+        public Task<Stock?> UpdateAsync(int id, UpdateStockRequestDto stockDto)
         {
-            var existingStock = await _context.Stocks.FirstOrDefaultAsync(x => x.Id == id);
+            return _context.Database.QueryStoredProcedureAsync("sp_Stock_Update",
+                reader => reader.ReadFirstOrDefaultAsync(StoredProcedureReaders.ReadStock),
+                StoredProcedures.In("p_Id", id),
+                StoredProcedures.In("p_Symbol", stockDto.Symbol),
+                StoredProcedures.In("p_CompanyName", stockDto.CompanyName),
+                StoredProcedures.In("p_Purchase", stockDto.Purchase),
+                StoredProcedures.In("p_LastDiv", stockDto.LastDiv),
+                StoredProcedures.In("p_Industry", stockDto.Industry),
+                StoredProcedures.In("p_MarketCap", stockDto.MarketCap));
+        }
 
-            if (existingStock == null)
+        private static void AttachComments(List<Stock> stocks, List<Comment> comments)
+        {
+            var stocksById = stocks.ToDictionary(s => s.Id);
+            foreach (var comment in comments)
             {
-                return null;
+                if (comment.StockId is int stockId && stocksById.TryGetValue(stockId, out var stock))
+                {
+                    comment.Stock = stock;
+                    stock.Comments.Add(comment);
+                }
             }
+        }
 
-            existingStock.Symbol = stockDto.Symbol;
-            existingStock.CompanyName = stockDto.CompanyName;
-            existingStock.Purchase = stockDto.Purchase;
-            existingStock.LastDiv = stockDto.LastDiv;
-            existingStock.Industry = stockDto.Industry;
-            existingStock.MarketCap = stockDto.MarketCap;
-
-            await _context.SaveChangesAsync();
-
-            return existingStock;
+        private static string? NullIfWhiteSpace(string? value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? null : value;
         }
     }
 }

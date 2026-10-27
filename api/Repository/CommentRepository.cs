@@ -6,7 +6,7 @@ using api.Data;
 using api.Helpers;
 using api.Interfaces;
 using api.Models;
-using Microsoft.EntityFrameworkCore;
+using MySql.Data.MySqlClient;
 
 namespace api.Repository
 {
@@ -20,60 +20,51 @@ namespace api.Repository
 
         public async Task<Comment> CreateAsync(Comment commentModel)
         {
-            await _context.Comments.AddAsync(commentModel);
-            await _context.SaveChangesAsync();
+            var id = StoredProcedures.Out("p_Id", MySqlDbType.Int32);
+
+            await _context.Database.ExecuteStoredProcedureAsync("sp_Comment_Create",
+                StoredProcedures.In("p_Title", commentModel.Title),
+                StoredProcedures.In("p_Content", commentModel.Content),
+                StoredProcedures.In("p_CreatedOn", commentModel.CreatedOn),
+                StoredProcedures.In("p_StockId", commentModel.StockId),
+                StoredProcedures.In("p_AppUserId", commentModel.AppUserId),
+                id);
+
+            commentModel.Id = Convert.ToInt32(id.Value);
             return commentModel;
         }
 
-        public async Task<Comment?> DeleteAsync(int id)
+        public Task<Comment?> DeleteAsync(int id)
         {
-            var commentModel = await _context.Comments.FirstOrDefaultAsync(x => x.Id == id);
-
-            if (commentModel == null)
-            {
-                return null;
-            }
-
-            _context.Comments.Remove(commentModel);
-            await _context.SaveChangesAsync();
-            return commentModel;
+            return _context.Database.QueryStoredProcedureAsync("sp_Comment_Delete",
+                reader => reader.ReadFirstOrDefaultAsync(StoredProcedureReaders.ReadComment),
+                StoredProcedures.In("p_Id", id));
         }
 
-        public async Task<List<Comment>> GetAllAsync(CommentQueryObject queryObject)
+        public Task<List<Comment>> GetAllAsync(CommentQueryObject queryObject)
         {
-            var comments = _context.Comments.Include(a => a.AppUser).AsQueryable();
+            var symbol = string.IsNullOrWhiteSpace(queryObject.Symbol) ? null : queryObject.Symbol;
 
-            if (!string.IsNullOrWhiteSpace(queryObject.Symbol))
-            {
-                comments = comments.Where(s => s.Stock != null && s.Stock.Symbol == queryObject.Symbol);
-            };
-            if (queryObject.IsDecsending == true)
-            {
-                comments = comments.OrderByDescending(c => c.CreatedOn);
-            }
-            return await comments.ToListAsync();
+            return _context.Database.QueryStoredProcedureAsync("sp_Comment_GetAll",
+                reader => reader.ReadAllAsync(StoredProcedureReaders.ReadCommentWithAuthor),
+                StoredProcedures.In("p_Symbol", symbol),
+                StoredProcedures.In("p_IsDescending", queryObject.IsDecsending));
         }
 
-        public async Task<Comment?> GetByIdAsync(int id)
+        public Task<Comment?> GetByIdAsync(int id)
         {
-            return await _context.Comments.Include(a => a.AppUser).FirstOrDefaultAsync(c => c.Id == id);
+            return _context.Database.QueryStoredProcedureAsync("sp_Comment_GetById",
+                reader => reader.ReadFirstOrDefaultAsync(StoredProcedureReaders.ReadCommentWithAuthor),
+                StoredProcedures.In("p_Id", id));
         }
 
-        public async Task<Comment?> UpdateAsync(int id, Comment commentModel)
+        public Task<Comment?> UpdateAsync(int id, Comment commentModel)
         {
-            var existingComment = await _context.Comments.FindAsync(id);
-
-            if (existingComment == null)
-            {
-                return null;
-            }
-
-            existingComment.Title = commentModel.Title;
-            existingComment.Content = commentModel.Content;
-
-            await _context.SaveChangesAsync();
-
-            return existingComment;
+            return _context.Database.QueryStoredProcedureAsync("sp_Comment_Update",
+                reader => reader.ReadFirstOrDefaultAsync(StoredProcedureReaders.ReadComment),
+                StoredProcedures.In("p_Id", id),
+                StoredProcedures.In("p_Title", commentModel.Title),
+                StoredProcedures.In("p_Content", commentModel.Content));
         }
     }
 }
