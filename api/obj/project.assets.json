@@ -3634,7 +3634,7 @@
     ]
   },
   "packageFolders": {
-    "C:\\Users\\chanm\\.nuget\\packages\\": {},
+    "C:\\Users\\chanm\\AppData\\Local\\Temp\\cursor-sandbox-cache\\b9395d2e18f6b92e0606602f994592d7\\nuget": {},
     "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
   },
   "project": {
@@ -3643,7 +3643,7 @@
       "projectUniqueName": "C:\\Users\\chanm\\Documents\\OJT\\ASPNET\\Motomal\\api\\api.csproj",
       "projectName": "api",
       "projectPath": "C:\\Users\\chanm\\Documents\\OJT\\ASPNET\\Motomal\\api\\api.csproj",
-      "packagesPath": "C:\\Users\\chanm\\.nuget\\packages\\",
+      "packagesPath": "C:\\Users\\chanm\\AppData\\Local\\Temp\\cursor-sandbox-cache\\b9395d2e18f6b92e0606602f994592d7\\nuget",
       "outputPath": "C:\\Users\\chanm\\Documents\\OJT\\ASPNET\\Motomal\\api\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
